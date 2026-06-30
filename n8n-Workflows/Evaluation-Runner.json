@@ -1,0 +1,146 @@
+{
+  "updatedAt": "2026-06-20T14:04:15.890Z",
+  "createdAt": "2026-06-20T14:02:06.518Z",
+  "id": "1l7ltPV9cOaCMOde",
+  "name": "Evaluation-Runner",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "2609096e-9d30-4a61-b84c-713c99c20847",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hier die Stufe und Anzahl Durchläufe pro Aufruf einstellen\nconst STAGE = 4;                 // 1, 2, 3 oder 4\nconst RUNS_PER_DISRUPTION = 14;  // ergibt ~98 Läufe bei 7 Störungstypen\n\nconst disruptionTypes = [\n  \"truck_breakdown\", \"staff_absent\", \"no_vehicle\",\n  \"forklift_breakdown\", \"container_damage\", \"overweight\", \"weather_delay\"\n];\n\nconst orderIds = [\"co1\",\"co2\",\"co3\",\"co4\",\"co5\",\"co6\",\"co7\",\"co8\"];\n\nconst items = [];\nfor (const dtype of disruptionTypes) {\n  for (let i = 0; i < RUNS_PER_DISRUPTION; i++) {\n    items.push({\n      json: {\n        stage: STAGE,\n        disruption_type: dtype,\n        order_id: orderIds[Math.floor(Math.random() * orderIds.length)],\n        run_index: i\n      }\n    });\n  }\n}\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "660db17b-2f10-4826-af49-2320bc7b68d8",
+      "name": "Stage-Config"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        336,
+        16
+      ],
+      "id": "40e10795-7b39-4c4e-9015-01dce5787082",
+      "name": "Loop-Runs"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"http://dt-n8n:5678/webhook/disruption-stage\" + $json.stage }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        576,
+        80
+      ],
+      "id": "ca0ebc35-12e0-421c-a681-e0b652420f8c",
+      "name": "Call-Stage-Webhook"
+    }
+  ],
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Stage-Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage-Config": {
+      "main": [
+        [
+          {
+            "node": "Loop-Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop-Runs": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Call-Stage-Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call-Stage-Webhook": {
+      "main": [
+        [
+          {
+            "node": "Loop-Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "99af69b9-aef8-4715-85d7-1b43e3789df7",
+  "activeVersionId": null,
+  "versionCounter": 16,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-20T14:02:06.522Z",
+      "createdAt": "2026-06-20T14:02:06.522Z",
+      "role": "workflow:owner",
+      "workflowId": "1l7ltPV9cOaCMOde",
+      "projectId": "st3Busq0HK6c4b9n",
+      "project": {
+        "updatedAt": "2025-10-31T12:20:12.111Z",
+        "createdAt": "2025-10-31T12:09:06.829Z",
+        "id": "st3Busq0HK6c4b9n",
+        "name": "Mukhtar M <mukhtarmuse@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "5294235f-2244-419d-9928-10807016a897"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

@@ -1,0 +1,421 @@
+{
+  "updatedAt": "2026-06-24T16:16:01.881Z",
+  "createdAt": "2026-06-06T14:57:29.888Z",
+  "id": "vO42gRir5wbn7Zqu",
+  "name": "Agent-Loop",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "596ab80e-ed99-4552-a179-9b5eb160efe2",
+      "name": "Loop-Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{}, {}, {}]; // Erzeugt 3 leere Durchläufe"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "3bb9451d-ece5-496a-9e2c-8a426c5297c6",
+      "name": "Init-Loop-Counter"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "fa80d5eb-6f68-4c74-80ed-f4974fc718aa",
+      "name": "Loop-over"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Bestellung: {{ $('Loop-Trigger').first().json.order_id }}\nStörung: {{ JSON.stringify($('Loop-Trigger').first().json.disruption) }}\nPlan: {{ $('Loop-Trigger').first().json.plan_text }}\nFreie LKWs: {{ JSON.stringify($('Loop-Trigger').first().json.alternatives) }}\nNächste Schiffe: {{ JSON.stringify($('Loop-Trigger').first().json.next_vehicles) }}\n{{ $json.last_rejection ? \"Vorige Ablehnung: \" + $json.last_rejection : \"\" }}\nThing Descriptions (WoT-Kontext der relevanten Objekte):\n{{ JSON.stringify($('Prepare-Input').first().json.thing_descriptions, null, 2) }}",
+        "options": {
+          "systemMessage": "=Du bist der DISPATCHER-Agent in einem Logistik-Leitsystem.\nDu erstellst einen VOLLSTÄNDIGEN Reparaturplan mit ALLEN betroffenen Events.\n\nVorgehen (Chain of Thought):\n1. Berechne die Verspätung (Panne + Reparatur = Ankunft Terminal).\n2. Prüfe, ob das geplante Schiff (depart) noch erreichbar ist.\n3. Falls NICHT: Wähle das nächste Schiff aus \"Nächste Fahrzeuge\".\n4. Berechne ALLE betroffenen Folge-Events neu.\n\nDer erlaubte Aktionskatalog für diese Störung lautet:\n{{ $('Loop-Trigger').first().json.action_catalog.join(', ') }}\n\nVerwende ausschließlich diese angegebenen Aktionen! Andere Aktionen werden vom Compliance-Agenten abgelehnt.\n\n>>> ZEITSTEMPEL-REGEL (SEHR WICHTIG) <<<\nGib JEDEN Zeitstempel EXAKT als: YYYY-MM-DD HH:MM:SS (z.B. 2023-05-24 18:00:00).\nKEINE Zeitzone, KEIN \"T\", KEIN \"Z\", KEIN \"+00:00\".\n- 24-STUNDEN-REGEL: Stunden gehen nur von 00 bis 23. Wenn deine Berechnung 24 Stunden oder mehr ergibt, musst du das Datum um einen Tag erhöhen und die Stunden von 00 an neu zählen (z. B. 17:00:00 + 7 Stunden = Folgetag 00:00:00, NIEMALS 24:00:00!).\n\nKONTEXT-FORMAT (WoT Thing Descriptions):\nDu erhältst zusätzlich strukturierte Objektbeschreibungen im\nW3C-WoT-Thing-Description-Format. Jedes Objekt hat:\n- properties: aktueller Zustand (z.B. status: \"available\" / \"in_use\")\n- actions: Aktionen die du für DIESES Objekt ausführen darfst,\n  inklusive der erwarteten Input-Parameter\n- events: mögliche Störungsereignisse dieses Objekttyps\n\nKalibriere deinen Confidence-Score streng:\n- 0.90–1.00: nur wenn Aktion eindeutig korrekt ist, alle Parameter geprüft,\n  keine bessere Alternative existiert\n- 0.75–0.89: Aktion wahrscheinlich korrekt, aber Unsicherheiten bei Parametern\n- 0.60–0.74: Aktion möglich, aber alternative Lösungen gleichwertig\n- < 0.60: unklare Situation, HITL empfohlen\n\nBei komplexen Störungen mit mehreren betroffenen Objekten: maximal 0.85,\nda Folgeauswirkungen nicht vollständig simulierbar sind.\nNutze NUR Aktionen, die in den actions eines Things mit\nstatus \"available\" definiert sind. Ein Thing mit status \"in_use\"\noder \"broken_down\" steht NICHT als Ersatz zur Verfügung.\n\nAntworte AUSSCHLIESSLICH als reines JSON, KEIN Markdown, keine ```json-Blöcke:\n{\n  \"chain_of_thought\": \"Deine logische Begründung auf Deutsch...\",\n  \"confidence_score\": 0.95,\n  \"events\": [\n    { \n      \"shadow_id\": \"sh_co1_reg\", \n      \"event_type\": \"drive_to_terminal\",\n      \"event_timestamp\": \"2023-05-24 18:00:00\", \n      \"overrides_event_id\": \"reg_co1\",\n      \"action_parameters\": { \"truck_id\": \"tr5\" }, \n      \"is_new_event\": false \n    }\n  ]\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        848,
+        32
+      ],
+      "id": "d57d75fb-798a-468f-b508-c7f7b54b0911",
+      "name": "Dispatcher"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        848,
+        192
+      ],
+      "id": "64d84b55-50a7-4f56-8e2d-b050cabc0663",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "TJzmKDRUvOpWPH43",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function fixTs(ts) {\n  if (!ts || typeof ts !== 'string') return ts;\n  ts = ts.replace('T', ' ').replace(/Z$/, '').trim();\n  ts = ts.replace(/^(\\d{4})/, (match, year) => {\n    return parseInt(year) !== 2023 ? '2023' : year;\n  });\n  const m = ts.match(/^(\\d{4}-\\d{2}-\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})$/);\n  if (!m) return ts;\n  const hour = parseInt(m[2]);\n  if (hour < 24) return ts;\n  const d = new Date(`${m[1]}T00:00:00`);\n  d.setHours(hour);\n  const date = d.toISOString().slice(0, 10);\n  const h = String(d.getHours()).padStart(2, '0');\n  return `${date} ${h}:${m[3]}:${m[4]}`;\n}\n\nconst raw = $input.first().json.output\n         || $input.first().json.text\n         || \"\";\n\nlet c = raw.replace(/```json\\s*/gi, \"\").replace(/```\\s*/g, \"\").trim();\nconst s = c.indexOf(\"{\");\nconst e = c.lastIndexOf(\"}\");\nif (s === -1 || e === -1) throw new Error(\"Kein JSON gefunden: \" + c.substring(0, 200));\n\nlet p = {};\nlet parseSuccess = false;\n\ntry {\n  p = JSON.parse(c.substring(s, e + 1));\n  parseSuccess = true;\n} catch (err) {\n  const eventsMatch = c.match(/\"events\"\\s*:\\s*(\\[[\\s\\S]*?\\])/);\n  const confidenceMatch = c.match(/\"confidence_score\"\\s*:\\s*([0-9.]+)/);\n  const cotMatch = c.match(/\"chain_of_thought\"\\s*:\\s*\"([\\s\\S]*?)\"\\s*,\\s*\"/);\n\n  p.events = eventsMatch ? (() => { try { return JSON.parse(eventsMatch[1]); } catch { return []; } })() : [];\n  p.confidence_score = confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.0;\n  p.chain_of_thought = cotMatch ? cotMatch[1] : \"Fehler beim Parsen der CoT (durch n8n-Selbstheilung gerettet)\";\n}\n\nif (!Array.isArray(p.events)) p.events = [];\nif (typeof p.confidence_score !== \"number\") p.confidence_score = 0.0;\n\np.events = p.events.map(ev => ({\n  ...ev,\n  event_timestamp: fixTs(ev.event_timestamp)\n}));\n\nreturn [{ json: { ...p, error: !parseSuccess } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        32
+      ],
+      "id": "2b1750d2-76b9-429b-a02a-0a54acde6197",
+      "name": "Clean-Dispatcher"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "=Du bist der COMPLIANCE-Agent. Prüfe die vorgeschlagene Aktion gegen folgende Regeln:\n\nHARTE REGELN — bei Verstoß gegen EINE Regel sofort ablehnen:\n1. Kosten: Ersatz oder Umbuchung maximal 5000 EUR.\n2. Aktionskatalog: Nur erlaubte Aktionen verwenden: {{ $('Loop-Trigger').first().json.action_catalog.join(', ') }}\n3. Abfahrtszeit: Die vorgeschlagene neue Abfahrtszeit darf maximal 14 Tage (336 Stunden) nach der ursprünglichen liegen. Umbuchungen auf das nächste verfügbare Schiff sind zulässig wenn kein früheres Schiff verfügbar ist..\n4. Vollständigkeit: Bei einer Umbuchung oder Umplanung muss ein konkreter neuer Zeitstempel angegeben sein — vage Formulierungen ohne Zeitangabe sind abzulehnen.\n5. Ressourcenkonflikt: Das vorgeschlagene Ersatzfahrzeug darf für denselben Zeitraum keine bereits zugewiesene Ladung haben.\n6. Risikogrenze: Wenn der Dispatcher einen confidence_score unter 0.75 hat und die Aktion mehr als zwei Ressourcen gleichzeitig betrifft, ist menschliche Prüfung erforderlich — ablehnen.\n\nAntworte AUSSCHLIESSLICH als reines JSON, KEIN Markdown, keine ```json-Blöcke:\n{ \"approved\": true/false, \"reason\": \"Welche Regel erfüllt oder verletzt wurde\" }"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1312,
+        -32
+      ],
+      "id": "131f996a-73f6-4bcc-a0a8-e9278853d9f9",
+      "name": "Compliance"
+    },
+    {
+      "parameters": {
+        "model": "openai/o4-mini",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        192
+      ],
+      "id": "7707b48e-e4ee-40a2-850a-1a07dab76b46",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "TJzmKDRUvOpWPH43",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const disp = $('Clean-Dispatcher').first().json;\n  \n  // Falls der Dispatcher schon fehlerhaft war, leiten wir das direkt als Ablehnung weiter\n  if (disp.error) {\n    return [{ json: { ...disp, approved: false, reason: disp.reason } }];\n  }\n\n  const raw = $input.first().json.output || $input.first().json.text || \"\";\n  let c = raw.replace(/```json\\s*/gi, \"\").replace(/```\\s*/g, \"\").trim();\n  const s = c.indexOf(\"{\"), e = c.lastIndexOf(\"}\");\n  \n  if (s === -1 || e === -1) {\n    return [{ json: { ...disp, approved: false, reason: \"Compliance-Antwort ist kein gültiges JSON: \" + c.substring(0, 100) } }];\n  }\n  \n  const p = JSON.parse(c.substring(s, e + 1));\n  if (typeof p.approved !== \"boolean\") p.approved = false;\n  \n  return [{ json: { ...disp, approved: p.approved, reason: p.reason || \"Von Compliance abgelehnt.\" } }];\n} catch (err) {\n  const disp = $('Clean-Dispatcher').first().json;\n  return [{ json: { ...disp, approved: false, reason: \"Fehler in Compliance-Bereinigung: \" + err.message } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        32
+      ],
+      "id": "23787fe1-de11-4a68-b20a-87d769638b9a",
+      "name": "Clean-Compliance"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "725cbf4c-85dc-4250-9be3-ec94505a32cf",
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1872,
+        32
+      ],
+      "id": "014eb5bc-343f-4627-abe2-7c94395df7c9",
+      "name": "Approved-IF"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nreturn [{ json: {\n  chain_of_thought:           result.chain_of_thought,\n  confidence_score:           result.confidence_score,\n  events:                     result.events,\n  error:                      false,\n  approved:                   true,\n  reason:                     result.reason,\n  compliance_rejection_count: result.compliance_rejection_count ?? 0\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        -64
+      ],
+      "id": "4d89237f-5a7c-4d11-8243-163cf575aa76",
+      "name": "Return-Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cur = $json;\nconst rejectionCount = (cur.compliance_rejection_count ?? 0) + 1;\nreturn [{ json: { \n  ...cur, \n  last_rejection: cur.reason || \"abgelehnt\",\n  compliance_rejection_count: rejectionCount\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        128
+      ],
+      "id": "208435e2-9429-4748-ac90-bca8d63aff93",
+      "name": "Retry-Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Liest die echte Begründung aus dem letzten Schleifendurchlauf aus\nconst lastReason = $('Clean-Compliance').last()?.json?.reason || \"Keine kommenden Schiffsabfahrten vorhanden.\";\nreturn [{ json: { escalate: true, reason: lastReason } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -144
+      ],
+      "id": "4e5369ed-7b74-4d28-a929-31b0cf57fe09",
+      "name": "Escalate-Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  order_id:               data.order_id,\n  disruption:             data.disruption,\n  plan_text:              data.plan_text,\n  alternatives:           data.alternatives,\n  next_vehicles:          data.next_vehicles,\n  action_catalog:         data.action_catalog,\n  disruption_description: data.disruption_description,\n  search_object_type:     data.search_object_type,\n  thing_descriptions:     data.thing_descriptions,\n  last_rejection:         data.last_rejection || \"\"\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "f37c0464-da2e-475e-a5b9-498a4656c6de",
+      "name": "Prepare-Input"
+    }
+  ],
+  "connections": {
+    "Loop-Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare-Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init-Loop-Counter": {
+      "main": [
+        [
+          {
+            "node": "Loop-over",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop-over": {
+      "main": [
+        [
+          {
+            "node": "Escalate-Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Clean-Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Dispatcher",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean-Dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Compliance",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compliance": {
+      "main": [
+        [
+          {
+            "node": "Clean-Compliance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean-Compliance": {
+      "main": [
+        [
+          {
+            "node": "Approved-IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved-IF": {
+      "main": [
+        [
+          {
+            "node": "Return-Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry-Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry-Check": {
+      "main": [
+        [
+          {
+            "node": "Loop-over",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare-Input": {
+      "main": [
+        [
+          {
+            "node": "Init-Loop-Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "a60711b2-8a58-4f39-b27a-8b74765dd7f2",
+  "activeVersionId": "a60711b2-8a58-4f39-b27a-8b74765dd7f2",
+  "versionCounter": 102,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-06T14:57:29.891Z",
+      "createdAt": "2026-06-06T14:57:29.891Z",
+      "role": "workflow:owner",
+      "workflowId": "vO42gRir5wbn7Zqu",
+      "projectId": "st3Busq0HK6c4b9n",
+      "project": {
+        "updatedAt": "2025-10-31T12:20:12.111Z",
+        "createdAt": "2025-10-31T12:09:06.829Z",
+        "id": "st3Busq0HK6c4b9n",
+        "name": "Mukhtar M <mukhtarmuse@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "5294235f-2244-419d-9928-10807016a897"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "loop-4",
+    "description": ""
+  }
+}

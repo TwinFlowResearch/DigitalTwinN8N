@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS shadow_events (
+    shadow_id                  TEXT PRIMARY KEY,
+    event_type                 TEXT NOT NULL,
+    event_timestamp            TIMESTAMP NOT NULL,
+    created_at                 TIMESTAMP DEFAULT NOW(),
+    order_id                   TEXT NOT NULL,
+    trigger_event_id           TEXT,
+    overrides_event_id         TEXT,
+    is_new_event               BOOLEAN DEFAULT FALSE,
+    action_parameters          JSONB,
+    confidence_score           REAL,
+    chain_of_thought           TEXT,
+    test_id                    TEXT,
+    experiment_stage           INTEGER,
+    disruption_type            TEXT,
+    llm_model                  TEXT,
+    tokens_prompt              INTEGER,
+    tokens_completion          INTEGER,
+    api_cost_usd               REAL,
+    latency_ms                 INTEGER,
+    compliance_approved        BOOLEAN,
+    compliance_rejection_count INTEGER DEFAULT 0,
+    hitl_required              BOOLEAN DEFAULT FALSE,
+    hitl_approved_by           TEXT,
+    outcome_success            BOOLEAN,
+    outcome_note               TEXT,
+    outcome_evaluated_at       TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sh_order      ON shadow_events(order_id);
+CREATE INDEX IF NOT EXISTS idx_sh_disruption ON shadow_events(disruption_type);

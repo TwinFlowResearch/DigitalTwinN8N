@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: dt-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: dtuser
+      POSTGRES_PASSWORD: dtpass123
+      POSTGRES_DB: logistics
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - dt-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: dt-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@twin.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    volumes:
+      - pgadmindata:/var/lib/pgadmin
+    networks:
+      - dt-network
+    depends_on:
+      - postgres
+
+  backend:
+    build: ./backend
+    container_name: dt-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: logistics
+      DB_USER: dtuser
+      DB_PASS: dtpass123
+    networks:
+      - dt-network
+    depends_on:
+      - postgres
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: dt-n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - dt-network
+    depends_on:
+      - backend
+
+networks:
+  dt-network:
+    name: dt-network
+
+volumes:
+  pgdata:
+  pgadmindata:
+  n8n_data:

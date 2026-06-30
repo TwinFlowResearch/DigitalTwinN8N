@@ -1,0 +1,264 @@
+{
+  "updatedAt": "2026-06-24T17:25:09.793Z",
+  "createdAt": "2026-06-17T15:13:39.708Z",
+  "id": "3cLWg7N11gZq9qKo",
+  "name": "Agent-Loop-Stage2",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ce12fbfd-5112-4e94-af94-b8f8b1d0832a",
+      "name": "Loop-Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stages 1, 2, 3 — kein Retry nötig, ein Durchlauf reicht\nreturn [{}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "0be7b799-71ff-4e9b-b9a8-e9d5431e7c38",
+      "name": "Init-Loop-Counter"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "e7b5e8df-01ed-41e6-847f-ba343eab964e",
+      "name": "Loop-over"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Störung: {{ JSON.stringify($('Prepare-Input').first().json.disruption) }}",
+        "options": {
+          "systemMessage": "=Du bist ein Logistik-Agent. Eine Störung ist aufgetreten.\n\nStörung: {{ JSON.stringify($json.disruption) }}\nVerfügbare Aktionen: {{ $json.action_catalog.join(', ') }}\nGerätebeschreibungen (WoT): {{ JSON.stringify($json.thing_descriptions) }}\n\nNutze die Gerätebeschreibungen um zu prüfen welche Ressourcen verfügbar sind.\nWähle die beste Aktion und antworte als reines JSON:\n{\n  \"chain_of_thought\": \"...\",\n  \"confidence_score\": 0.00,\n  \"events\": [...]\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        848,
+        16
+      ],
+      "id": "16e904b6-74db-4f80-9301-610e6d85333b",
+      "name": "Dispatcher"
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        848,
+        192
+      ],
+      "id": "7da933c3-0d9a-4fdf-b2b9-20c0cbaef0a9",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "TJzmKDRUvOpWPH43",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const raw = $input.first().json.output || $input.first().json.text || \"\";\n  let c = raw.replace(/```json\\s*/gi, \"\").replace(/```\\s*/g, \"\").trim();\n  const s = c.indexOf(\"{\"), e = c.lastIndexOf(\"}\");\n  \n  if (s === -1 || e === -1) {\n    // Falls die KI Klartext statt JSON antwortet, fangen wir das hier ab:\n    return [{ json: { \n      confidence_score: 0.0, \n      chain_of_thought: c, \n      events: [], \n      error: true, \n      reason: c.substring(0, 250) // Speichert die Erklärung der KI\n    } }];\n  }\n  \n  const p = JSON.parse(c.substring(s, e + 1));\n  if (!Array.isArray(p.events)) p.events = [];\n  if (typeof p.confidence_score !== \"number\") p.confidence_score = 0.0;\n  \n  return [{ json: { ...p, error: false } }];\n} catch (err) {\n  return [{ json: { \n    confidence_score: 0.0, \n    chain_of_thought: \"Fehler beim Verarbeiten\", \n    events: [], \n    error: true, \n    reason: \"Fehler beim Parsen der KI-Antwort: \" + err.message \n  } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "24aeb2b5-c01d-4a96-b93b-2b426916a895",
+      "name": "Clean-Dispatcher"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nreturn [{ json: {\n  chain_of_thought:           result.chain_of_thought || \"\",\n  confidence_score:           result.confidence_score || 0,\n  events:                     result.events || [],\n  error:                      false,\n  approved:                   true,\n  compliance_rejection_count: 0\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        16
+      ],
+      "id": "da11e118-4a3f-4a3a-a0ac-08e26bc5b36e",
+      "name": "Return-Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Liest die echte Begründung aus dem letzten Schleifendurchlauf aus\nconst lastReason = $('Clean-Compliance').last()?.json?.reason || \"Keine kommenden Schiffsabfahrten vorhanden.\";\nreturn [{ json: { escalate: true, reason: lastReason } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -144
+      ],
+      "id": "bfd3c9a3-0ec8-483c-a576-3f699efe7144",
+      "name": "Escalate-Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  order_id:               data.order_id,\n  disruption:             data.disruption,\n  plan_text:              data.plan_text,\n  alternatives:           data.alternatives,\n  next_vehicles:          data.next_vehicles,\n  action_catalog:         data.action_catalog,\n  disruption_description: data.disruption_description,\n  search_object_type:     data.search_object_type,\n  thing_descriptions:     data.thing_descriptions,\n  last_rejection:         data.last_rejection || \"\"\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "941383ca-e106-4235-8ec0-6f7954940d14",
+      "name": "Prepare-Input"
+    }
+  ],
+  "connections": {
+    "Loop-Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare-Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init-Loop-Counter": {
+      "main": [
+        [
+          {
+            "node": "Loop-over",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop-over": {
+      "main": [
+        [
+          {
+            "node": "Escalate-Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Clean-Dispatcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Dispatcher",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean-Dispatcher": {
+      "main": [
+        [
+          {
+            "node": "Return-Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare-Input": {
+      "main": [
+        [
+          {
+            "node": "Init-Loop-Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "a934aca6-79ee-40a8-9942-91060e2bba0a",
+  "activeVersionId": "a934aca6-79ee-40a8-9942-91060e2bba0a",
+  "versionCounter": 10,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-17T15:13:39.711Z",
+      "createdAt": "2026-06-17T15:13:39.711Z",
+      "role": "workflow:owner",
+      "workflowId": "3cLWg7N11gZq9qKo",
+      "projectId": "st3Busq0HK6c4b9n",
+      "project": {
+        "updatedAt": "2025-10-31T12:20:12.111Z",
+        "createdAt": "2025-10-31T12:09:06.829Z",
+        "id": "st3Busq0HK6c4b9n",
+        "name": "Mukhtar M <mukhtarmuse@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "5294235f-2244-419d-9928-10807016a897"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "loop-2",
+    "description": ""
+  }
+}

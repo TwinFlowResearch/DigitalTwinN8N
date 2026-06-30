@@ -1,0 +1,1244 @@
+{
+  "updatedAt": "2026-06-29T16:09:57.210Z",
+  "createdAt": "2026-06-20T13:36:00.862Z",
+  "id": "iUTd8oC98cO3xfsW",
+  "name": "Digital-Twin-Main-Evaluation",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "disruption",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "565e7128-6756-45bf-996a-e5e20efb53ff",
+      "name": "Webhook",
+      "webhookId": "7cd4880e-c172-494e-9a4d-fc20ee3d7222"
+    },
+    {
+      "parameters": {
+        "url": "http://dt-backend:8000/tool/kb_check",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "disruption_type",
+              "value": "=={{ $('Merge-Context').first().json.body.disruption.type }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        -176
+      ],
+      "id": "4ee09fb6-b8bd-47f1-aacc-14504362d487",
+      "name": "KB-Check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb0576d8-668f-45b1-9883-9139bc35a929",
+              "leftValue": "={{ $json.cache_hit === true && $('Merge-Context').first().json.experiment_stage !== 4 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1248,
+        -176
+      ],
+      "id": "21a462ec-39cf-477a-ae2a-7a8c74dfc1e4",
+      "name": "Cache-IF"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sol = $json.solution;\nconst orderId = $('Merge-Inputs').first().json.body.order_id;\n\nreturn [{ json: {\n  confidence_score: sol.confidence_score || 0.95,\n  chain_of_thought: \"FAST PATH (Knowledge Base): \" + (sol.chain_of_thought || \"Gecachte Lösung\"),\n  events: sol.action_parameters?.events || [{\n    shadow_id: \"sh_\" + orderId + \"_cached_\" + Date.now(),\n    event_type: sol.event_type || \"cached_action\",\n    event_timestamp: sol.action_parameters?.event_timestamp || new Date().toISOString().replace(\"T\", \" \").substring(0,19),\n    // ↓ KORREKTUR: Liest die event_id nun sicher aus dem Merge-Context Node aus\n    overrides_event_id: $('Merge-Context').first().json.body.disruption?.event_id ?? null,\n    action_parameters: sol.action_parameters || {},\n    is_new_event: false\n  }],\n  from_cache: true\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1392,
+        -352
+      ],
+      "id": "21838fd1-bf41-4971-bd3b-5d6e86a6f6c0",
+      "name": "Cache-Solution"
+    },
+    {
+      "parameters": {
+        "url": "http://dt-backend:8000/tool/get_trace",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "order_id",
+              "value": "={{ $('Merge-Inputs').first().json.body.order_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1424,
+        -176
+      ],
+      "id": "1b5c3f16-111d-4906-97d4-12a3b929f5c6",
+      "name": "Get-Trace"
+    },
+    {
+      "parameters": {
+        "jsCode": "const trace = $json.trace || [];\n\n// WICHTIGER FIX: Wir holen das ausgefüllte Paket aus 'Merge-Context'!\nconst body = $('Merge-Context').first().json.body;\n\nconst planText = trace.map(e => `${e.ts} | ${e.ocel_type} | ${e.objects}`).join(\"\\n\");\n\nreturn [{ json: { \n  order_id: body.order_id, \n  disruption: body.disruption, \n  plan_text: planText \n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        -176
+      ],
+      "id": "560dfbc4-207f-41de-bd50-9478752c069a",
+      "name": "Build-Context"
+    },
+    {
+      "parameters": {
+        "url": "http://dt-backend:8000/tool/search_alternatives",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "object_type",
+              "value": "={{ $('Enrich-Context').first().json.search_object_type || 'Truck' }}"
+            },
+            {
+              "name": "target_time",
+              "value": "={{ $('Build-Context').first().json.disruption.expected_miss_time }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1744,
+        -304
+      ],
+      "id": "756e2679-68b7-4302-8bf1-119236e82652",
+      "name": "Search-Alternatives"
+    },
+    {
+      "parameters": {
+        "url": "http://dt-backend:8000/tool/search_next_vehicle",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "after_timestamp",
+              "value": "=={{ $('Build-Context').first().json.disruption.expected_miss_time }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1760,
+        -128
+      ],
+      "id": "31b676b8-86a4-4c24-8c1c-984faf2df891",
+      "name": "Search-Next-Vehicle"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1952,
+        -240
+      ],
+      "id": "e2537123-0abc-4c9c-90cd-bd7e20b5b954",
+      "name": "Merge-Tools"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  order_id:               $('Build-Context').first().json.order_id,\n  disruption:             $('Merge-Context').first().json.body.disruption,\n  plan_text:              $('Build-Context').first().json.plan_text,\n  alternatives:           $('Search-Alternatives').first().json.available,\n  next_vehicles:          $('Search-Next-Vehicle').first().json.next_vehicles,\n  action_catalog:         $('Enrich-Context').first().json.action_catalog,\n  disruption_description: $('Enrich-Context').first().json.disruption_description,\n  search_object_type:     $('Enrich-Context').first().json.search_object_type,\n  thing_descriptions:     $('Get-Thing-Descriptions').first().json.thing_descriptions,\n  last_rejection:         \"\" ,\n  experiment_stage: $('Merge-Context').first().json.experiment_stage ?? 4\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        -240
+      ],
+      "id": "921cbba7-b0c1-47ba-845c-122a3e2a1fc8",
+      "name": "Prepare-For-Loop"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b393a039-5c53-4336-82b2-1384296c68e1",
+                    "leftValue": "={{ $json.escalate }}",
+                    "rightValue": "Escalated",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Escalated"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.confidence_score }}",
+                    "rightValue": 0.9,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gt"
+                    },
+                    "id": "295c2032-4e3f-478b-9603-912628ec54c9"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Auto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a8635fdc-0f49-4402-925f-1eab6fcca12d",
+                    "leftValue": "={{ $json.confidence_score }}",
+                    "rightValue": 0.7,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Notify"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "661fdc3a-532e-4938-98ed-2b633e7cee52",
+                    "leftValue": "={{ $json.confidence_score }}",
+                    "rightValue": 0.7,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HITL"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        3152,
+        -256
+      ],
+      "id": "74e1c608-95bd-4b73-b202-88a20a3f6d84",
+      "name": "Confidence-Switch"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://dt-backend:8000/tool/write_cascade",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"order_id\": \"{{ $('Merge-Inputs').first().json.body.order_id }}\",\n  \"trigger_event_id\": \"{{ $('Merge-Context').first().json.body.disruption?.event_id ?? null }}\",\n  \"confidence_score\": {{ $json.confidence_score || 0 }},\n  \"chain_of_thought\": {{ JSON.stringify($json.chain_of_thought || \"kein chain_of_thought\") }},\n  \"test_id\": \"{{ $('Merge-Inputs').first().json.body.test_id || '' }}\",\n  \"experiment_stage\": {{ $('Merge-Inputs').first().json.body.experiment_stage || 4 }},\n  \"disruption_type\": \"{{ $('Merge-Inputs').first().json.body.disruption_type || $('Merge-Context').first().json.body.disruption?.type || 'unknown' }}\",\n  \"llm_model\": \"OpenRouter\",\n  \"compliance_approved\": {{ $json.compliance_approved ?? true }},\n  \"compliance_rejection_count\": {{ $json.compliance_rejection_count || 0 }},\n  \"hitl_required\": {{ $json.confidence_score < 0.70 }},\n  \"events\": {{ JSON.stringify(($json.events || []).map((ev, index) => ({\n  ...ev,\n  event_type: ev.event_type || ev.type || \"unknown_action\",\n  event_timestamp: ev.event_timestamp || $('Merge-Context').first().json.body.disruption?.event_time || \"2023-06-01 09:00:00\",\n  is_new_event: ev.is_new_event ?? true,\n  shadow_id: ev.shadow_id || (\"sh_\" + $('Merge-Inputs').first().json.body.order_id + \"_healed_\" + index + \"_\" + Date.now())\n}))) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3520,
+        -224
+      ],
+      "id": "4468907c-05bc-4afa-883f-862305419945",
+      "name": "Write-Cascade"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://dt-backend:8000/tool/auto_evaluate_outcome",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "order_id",
+              "value": "={{ $('Merge-Inputs').first().json.body.order_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3760,
+        -224
+      ],
+      "id": "a122a10e-9fdc-4d3a-956d-c2e4f0ff9d26",
+      "name": "Auto-Evaluate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Enrich-Context').first().json;\nif (!ctx) throw new Error(\"Enrich-Context hat nichts zurückgegeben.\");\n\nconst trace = ctx.full_trace || [];\nlet containerId = ctx.disruption?.container_id ?? null;\n\n// 1. Fallback für die Container-ID\nif (!containerId && trace.length > 0) {\n  for (const event of trace) {\n    const objects = event.objects || [];\n    if (Array.isArray(objects)) {\n      const found = objects.find(o => o.object_type === 'Container');\n      if (found) { containerId = found.object_id; break; }\n    }\n    if (typeof objects === 'string') {\n      const match = objects.match(/Container:([^\\s,]+)/);\n      if (match) { containerId = match[1]; break; }\n    }\n  }\n}\n\n// 2. Disruption-Type Mapping\nlet userDisruptionType = $('Merge-Inputs').first().json.body.disruption_type;\nif (userDisruptionType) {\n  userDisruptionType = userDisruptionType.toLowerCase().trim();\n}\nconst resolvedType = userDisruptionType || ctx.disruption_type;\n\n// 3. WICHTIG: Stufe aus dem Webhook-Body auslesen (Default: 4)\nconst stage = $('Merge-Inputs').first().json.body?.experiment_stage ?? 4;\n\nreturn [{ json: {\n  body: {\n    order_id:   ctx.order_id,\n    disruption: ctx.disruption ? { \n      ...ctx.disruption, \n      type: resolvedType, \n      container_id: containerId \n    } : null\n  },\n  source:                 $('Merge-Inputs').first().json.source || \"webhook\",\n  has_disruption:         ctx.has_disruption,\n  depart_time:            ctx.disruption?.expected_miss_time ?? null,\n  action_catalog:         ctx.action_catalog,\n  disruption_description: ctx.disruption_description,\n  search_object_type:     ctx.search_object_type,\n  full_trace:             ctx.full_trace,\n  // ↓ DAS MUSS HIER STEHEN: Damit wird die Stufe an den Switch-Node weitergegeben!\n  experiment_stage:       stage \n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        0
+      ],
+      "id": "430168e6-ce88-4914-b86a-d0f6ae49049e",
+      "name": "Merge-Context"
+    },
+    {
+      "parameters": {
+        "url": "http://dt-backend:8000/tool/auto_generate_scenario",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "order_id",
+              "value": "={{ $json.body.order_id }}"
+            },
+            {
+              "name": "disruption_type",
+              "value": "={{ $('Merge-Inputs').first().json.body.disruption_type || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        704,
+        0
+      ],
+      "id": "d3f29b4a-4064-4b1b-9d13-b47e31fee387",
+      "name": "Enrich-Context"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c6ae8084-3684-40f5-9b89-538224dd75b8",
+              "leftValue": "={{ $json.has_disruption }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        992,
+        0
+      ],
+      "id": "21887724-df92-4a1e-b4db-c2418a420c0b",
+      "name": "Disruption-IF"
+    },
+    {
+      "parameters": {
+        "url": "http://dt-backend:8000/tool/get_thing_descriptions",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "order_id",
+              "value": "={{ $('Merge-Context').first().json.body.order_id }}"
+            },
+            {
+              "name": "disruption_object_id",
+              "value": "={{ $('Merge-Context').first().json.body.disruption.object_id }}"
+            },
+            {
+              "name": "disruption_object_type",
+              "value": "={{ $('Enrich-Context').first().json.search_object_type }}"
+            },
+            {
+              "name": "search_object_type",
+              "value": "={{ $('Enrich-Context').first().json.search_object_type }}"
+            },
+            {
+              "name": "available_ids",
+              "value": "={{ ($('Search-Alternatives').first().json.available || []).map(o => o.ocel_id).join(',') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2112,
+        -240
+      ],
+      "id": "a6cfc9a7-bb1b-4a61-ad86-787dfeb2637a",
+      "name": "Get-Thing-Descriptions"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ String($json.experiment_stage ?? 4) }}",
+                    "rightValue": "1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "db1c563f-5384-4705-a7da-507d3f7a5172"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Stage 1"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "67625653-49ec-4dc9-8395-6889deda14be",
+                    "leftValue": "={{ String($json.experiment_stage ?? 4) }}",
+                    "rightValue": "2",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Stage 2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "96283162-b7c8-46a3-a8b5-fce99496f6f0",
+                    "leftValue": "={{ String($json.experiment_stage ?? 4) }}",
+                    "rightValue": "3",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Stage 3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "389aa826-5e45-49ce-8fe9-b41b18bb9a6e",
+                    "leftValue": "={{ String($json.experiment_stage ?? 4) }}",
+                    "rightValue": "4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Stage 4"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2400,
+        -288
+      ],
+      "id": "e16b9ccc-e824-4e54-82a2-9d2850ae362f",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "vO42gRir5wbn7Zqu",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/vO42gRir5wbn7Zqu",
+          "cachedResultName": "Agent-Loop"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2576,
+        112
+      ],
+      "id": "8710d61b-4e4d-4043-97a5-1f69b2ab61c8",
+      "name": "Run-Agent-Loop-Stage4"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "8xgQg1lVbhQ3mx9U",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/8xgQg1lVbhQ3mx9U",
+          "cachedResultName": "Agent-Loop-Stage1"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2640,
+        -416
+      ],
+      "id": "44291356-664a-4cf4-9b8c-4def6f93dbbc",
+      "name": "Run-Agent-Loop-Stage1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3cLWg7N11gZq9qKo",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3cLWg7N11gZq9qKo",
+          "cachedResultName": "Agent-Loop-Stage2"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2608,
+        -224
+      ],
+      "id": "4a3520a5-7c70-49e7-a680-66fe6eaf433a",
+      "name": "Run-Agent-Loop-Stage2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "2BIN3DJjDMZEer5C",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/2BIN3DJjDMZEer5C",
+          "cachedResultName": "Agent-Loop-Stage3"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2560,
+        -80
+      ],
+      "id": "662f715e-b541-4bf4-814d-ebe7a6f70741",
+      "name": "Run-Agent-Loop-Stage3"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2896,
+        -256
+      ],
+      "id": "fe9f39d7-93b6-41e0-ad27-2af91b0e8b3d",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0e33f0dc-6d38-4aff-8840-10e0deb61963",
+              "name": "body.order_id",
+              "value": "={{ $json.body.order_id }}",
+              "type": "string"
+            },
+            {
+              "id": "2c28afe7-4045-46e5-92db-5fd84144e123",
+              "name": "outcome_success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "8b810123-4ef2-4b9f-a127-a8374dd2e0f6",
+              "name": "note",
+              "value": "Keine Disruption erkannt – kein Eingriff erforderlich",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1200,
+        96
+      ],
+      "id": "58b068b7-2b14-4399-b9d6-3c4bd8c11db6",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "responseNodes"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -848,
+        -192
+      ],
+      "id": "6b52a779-5dc4-477f-ab00-3689263f2e40",
+      "name": "When chat message received",
+      "webhookId": "127521cc-f82b-4411-acac-a7c2c7d5239c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = ($json.chatInput || \"\").trim();\nconst parts = input.split(/\\s+/);\n\nconst order_id = parts[0] || \"co1\";\nlet disruption_type = parts[1] || null;\n\n// Übersetzungstabelle: Macht aus Chat-Eingaben exakte Backend-Schlüssel\nconst mapping = {\n  \"truck\": \"truck_breakdown\",\n  \"stapler\": \"forklift_breakdown\",\n  \"schiff\": \"no_vehicle\",\n  \"wetter\": \"weather_delay\",\n  \"container\": \"container_damage\"\n};\n\nif (disruption_type) {\n  disruption_type = mapping[disruption_type.toLowerCase().trim()] || disruption_type;\n}\n\nreturn [{\n  json: {\n    body: {\n      order_id: order_id,\n      disruption_type: disruption_type\n    },\n    source: \"chat\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        -224
+      ],
+      "id": "4d32ebed-ad26-4217-9f7a-e59d8788bf05",
+      "name": "Parse-Chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  order_id:                   $('Merge-Inputs').first().json.body.order_id,\n  chain_of_thought:           \"Eskaliert: Compliance-Agent hat nach maximalen Versuchen nicht genehmigt.\",\n  confidence_score:           0.0,\n  events:                     [],\n  compliance_approved:        false,\n  compliance_rejection_count: 3,\n  hitl_required:              true\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        -368
+      ],
+      "id": "ede8f6d6-a403-4572-b08c-b25c522b97e5",
+      "name": "Escalated-Field"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -848,
+        -16
+      ],
+      "id": "77399dbf-83ee-446d-8a01-7c6444094bdb",
+      "name": "Merge-Inputs"
+    },
+    {
+      "parameters": {
+        "message": "={{ $json.has_disruption === false ? \n`✅ **NORMALER PROZESS — Keine Störung gemeldet**\n\n**📦 BESTELLUNG & STATUS**\n* **Bestellung:** ${$('Merge-Inputs').first().json.body.order_id}\n* **Status:** Normalbetrieb — Alle Prozesse verlaufen planmäßig\n\n**📋 LOGISTIK-HISTORIE (Normalbetrieb)**\n*(Alle Transport-Schritte verlaufen pünktlich).*\n\n${$('Merge-Context').first().json.full_trace.map(e => `- ${e.ts} | ${e.ocel_type}`).join(\"\\n\")}\n`\n:\n`✅ **KI-ENTSCHEIDUNG ERFOLGREICH ABGESCHLOSSEN!**\n\n**📦 BESTELLUNG & GEMELDETE STÖRUNG**\n* **Bestellung:** ${$('Merge-Inputs').first().json.body.order_id}\n* **Störungstyp:** ${$('Merge-Context').first().json.disruption_description}\n* **Verzögerung:** ${$('Merge').first().json.events?.[0]?.action_parameters?.delay_hours || $('Merge-Context').first().json.body?.disruption?.delay_hours || '4'} Stunden\n\n**🔧 PROZESS-VERLAUF & AKTIONSPLAN**\n*(Die betroffenen Originalschritte sind durchgestrichen, die korrigierten Schritte sind fettgedruckt).*\n\n${$('Merge-Context').first().json.full_trace.map(e => {\n  const override = ($('Merge').first().json.events || []).find(se => se.overrides_event_id === e.ocel_id);\n  if (override) {\n    return `~~❌ ${e.ts} | ${e.ocel_type}~~ \\n➔ **🔧 ALTERNATIV-PLAN: ${override.event_type} am ${override.event_timestamp}**`;\n  } else {\n    return `- ${e.ts} | ${e.ocel_type}`;\n  }\n}).join('\\n\\n')}\n\n**🧠 BEGRÜNDUNG (Chain of Thought)**\n${($('Merge').first().json.chain_of_thought || '').split('. ').map(s => s.trim() ? `* ${s.trim()}` : '').filter(Boolean).join('\\n')}\n`\n}}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1.3,
+      "position": [
+        5328,
+        144
+      ],
+      "id": "9538fad4-ced9-4940-9509-9da4bdf0c3b7",
+      "name": "Respond-Chat",
+      "webhookId": "73a83b8a-f180-4db5-a9b4-7ff1ff1444b6"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Enrich-Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KB-Check": {
+      "main": [
+        [
+          {
+            "node": "Cache-IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache-IF": {
+      "main": [
+        [
+          {
+            "node": "Cache-Solution",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get-Trace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get-Trace": {
+      "main": [
+        [
+          {
+            "node": "Build-Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build-Context": {
+      "main": [
+        [
+          {
+            "node": "Search-Alternatives",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search-Next-Vehicle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search-Alternatives": {
+      "main": [
+        [
+          {
+            "node": "Merge-Tools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search-Next-Vehicle": {
+      "main": [
+        [
+          {
+            "node": "Merge-Tools",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge-Tools": {
+      "main": [
+        [
+          {
+            "node": "Get-Thing-Descriptions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare-For-Loop": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confidence-Switch": {
+      "main": [
+        [
+          {
+            "node": "Escalated-Field",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write-Cascade",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write-Cascade",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write-Cascade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write-Cascade": {
+      "main": [
+        [
+          {
+            "node": "Auto-Evaluate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Evaluate": {
+      "main": [
+        []
+      ]
+    },
+    "Merge-Context": {
+      "main": [
+        [
+          {
+            "node": "Disruption-IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich-Context": {
+      "main": [
+        [
+          {
+            "node": "Merge-Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disruption-IF": {
+      "main": [
+        [
+          {
+            "node": "KB-Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get-Thing-Descriptions": {
+      "main": [
+        [
+          {
+            "node": "Prepare-For-Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Run-Agent-Loop-Stage1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run-Agent-Loop-Stage2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run-Agent-Loop-Stage3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run-Agent-Loop-Stage4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run-Agent-Loop-Stage4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run-Agent-Loop-Stage1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run-Agent-Loop-Stage3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Run-Agent-Loop-Stage2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Run-Agent-Loop-Stage4": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Confidence-Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache-Solution": {
+      "main": [
+        [
+          {
+            "node": "Write-Cascade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Parse-Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse-Chat": {
+      "main": [
+        []
+      ]
+    },
+    "Escalated-Field": {
+      "main": [
+        [
+          {
+            "node": "Write-Cascade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge-Inputs": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7",
+            "content-type": "application/json",
+            "user-agent": "n8n",
+            "content-length": "108",
+            "accept-encoding": "gzip, compress, deflate, br",
+            "host": "localhost:5678",
+            "connection": "close"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "order_id": "co1",
+            "disruption_type": "truck_breakdown",
+            "experiment_stage": 2,
+            "test_id": "s2_truck_breakdown_0"
+          },
+          "webhookUrl": "http://localhost:5678/webhook/disruption",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "75954538-0699-4d54-84b4-e55422b47dee",
+  "activeVersionId": "63977b76-051f-4efc-a4ab-1506495c8061",
+  "versionCounter": 223,
+  "triggerCount": 2,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-20T13:36:00.870Z",
+      "createdAt": "2026-06-20T13:36:00.870Z",
+      "role": "workflow:owner",
+      "workflowId": "iUTd8oC98cO3xfsW",
+      "projectId": "st3Busq0HK6c4b9n",
+      "project": {
+        "updatedAt": "2025-10-31T12:20:12.111Z",
+        "createdAt": "2025-10-31T12:09:06.829Z",
+        "id": "st3Busq0HK6c4b9n",
+        "name": "Mukhtar M <mukhtarmuse@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "5294235f-2244-419d-9928-10807016a897"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
