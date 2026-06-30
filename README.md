@@ -1,4 +1,4 @@
-# Kognitiver Digitaler Zwilling für Logistikprozesse
+# Digitaler Zwilling mit n8n und LLM-Agenten — KI-gestützte Entscheidungsfindung in der Logistik
 
 Implementierung eines Digitalen Zwillings mit n8n und einem KI-Agenten zur
 automatischen Erkennung, Diagnose und Behebung von Prozessabweichungen in
@@ -25,7 +25,7 @@ Compliance-Agenten, der diese vor der Ausführung prüft.
 ## Voraussetzungen
 
 - Docker Desktop
-- Ein OpenRouter-API-Schlüssel (für den Zugriff auf LLMs)
+- Ein LLM-API-Schlüssel
 - Der OCEL 2.0 Logistics Simulation Datensatz der RWTH Aachen (SQLite-Format)
 
 ## Setup
@@ -142,4 +142,4 @@ Die vollständige Dokumentation aller Endpunkte ist unter
 ## Lizenz und Datensatz
 
 Der verwendete OCEL-2.0-Datensatz stammt von der RWTH Aachen und ist nicht
-Teil dieses Repositories. [Link zur Quelle einfügen]
+Teil dieses Repositories. (https://www.ocel-standard.org/event-logs/simulations/logistics/)
