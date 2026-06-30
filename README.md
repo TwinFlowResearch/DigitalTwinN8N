@@ -110,7 +110,7 @@ Kombinationen aus Order-ID und Störungstyp auf.
 │   ├── Agent-Loop.json
 │   ├── Digital-Twin-Main-Evaluation.json
 │   └── Evaluation-Runner.json
-└── .env.example
+
 ```
 
 ## API-Endpunkte (Auszug)
